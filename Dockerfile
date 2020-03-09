@@ -52,3 +52,14 @@ COPY .vimrc.pluginstall .
 RUN vim -E -s -u ".vimrc.pluginstall" +'PlugInstall --sync' +qa
 
 RUN apt-get install -y nodejs npm
+
+RUN apt-get install -y sudo
+
+RUN git clone https://github.com/yuya-takeyama/helmenv.git ~/.helmenv && \
+    ln -snf $HOME/.helmenv/bin/helm /usr/local/bin/helm && \
+    ln -snf $HOME/.helmenv/bin/helmenv /usr/local/bin/helmenv && \
+    ln -snf $HOME/.helmenv/bin/tiller /usr/local/bin/tiller
+
+SHELL ["/bin/bash", "-c"]
+RUN helmenv install 3.1.1 && \
+    helmenv global 3.1.1
