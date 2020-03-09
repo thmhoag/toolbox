@@ -1,4 +1,17 @@
-FROM ubuntu:18.04
+FROM ubuntu:18.04 as builder
+
+RUN apt-get update
+RUN apt-get install -y \
+    git automake build-essential pkg-config \
+    libevent-dev libncurses5-dev curl
+
+RUN curl -LO https://raw.githubusercontent.com/thmhoag/dotfiles/master/scripts/install/tmux.sh && \
+    chmod a+rx ./tmux.sh && \
+    ./tmux.sh
+
+FROM ubuntu:18.04 as final
+
+WORKDIR /root
 
 RUN apt-get update && apt-get install -y software-properties-common
 
@@ -20,4 +33,22 @@ RUN curl -LO https://github.com/derailed/k9s/releases/download/$(curl -s "https:
     mv ./k9s /usr/local/bin/k9s && \
     rm k9s_Linux_x86_64.tar.gz
 
+RUN apt-get install -y libevent-dev
+
+COPY --from=builder /usr/local/bin/tmux /usr/local/bin/tmux
+
+RUN git clone https://github.com/tmux-plugins/tpm $HOME/.tmux/plugins/tpm
+
 RUN curl -s https://raw.githubusercontent.com/thmhoag/dotfiles/master/scripts/dotfiles-clone.sh | bash
+
+RUN ln -s -f /bin/bash /bin/sh
+RUN tmux start-server && \
+    tmux new-session -d && \
+    sleep 1 && \
+    /root/.tmux/plugins/tpm/scripts/install_plugins.sh && \
+    tmux kill-server
+
+COPY .vimrc.pluginstall .
+RUN vim -E -s -u ".vimrc.pluginstall" +'PlugInstall --sync' +qa
+
+RUN apt-get install -y nodejs npm
