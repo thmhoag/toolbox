@@ -75,4 +75,6 @@ RUN git clone https://github.com/yuya-takeyama/helmenv.git $HOME/.helmenv && \
 RUN helmenv install 3.1.1 && \
     helmenv global 3.1.1
 
+ENV TERM=xterm-256color
+
 CMD tmux
