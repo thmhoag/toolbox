@@ -1,6 +1,20 @@
-FROM ubuntu:18.04 as builder
+FROM ubuntu:18.04 as base
 
-RUN apt-get update
+RUN apt-get update && apt-get install -y software-properties-common
+RUN add-apt-repository ppa:git-core/ppa && \
+    add-apt-repository ppa:jonathonf/vim
+
+RUN apt-get install -y \
+    curl \
+    git \
+    vim \
+    libevent-dev \
+    nodejs npm \
+    sudo
+
+# tmux installer layer
+FROM base as tmux
+
 RUN apt-get install -y \
     git automake build-essential pkg-config \
     libevent-dev libncurses5-dev curl
@@ -9,33 +23,29 @@ RUN curl -LO https://raw.githubusercontent.com/thmhoag/dotfiles/master/scripts/i
     chmod a+rx ./tmux.sh && \
     ./tmux.sh
 
-FROM ubuntu:18.04 as final
+# k9s installer layer
+FROM base as k9s
+
+WORKDIR /app
+RUN curl -LO https://github.com/derailed/k9s/releases/download/$(curl -s "https://api.github.com/repos/derailed/k9s/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')/k9s_Linux_x86_64.tar.gz && \
+    tar xvf k9s_Linux_x86_64.tar.gz && \
+    chmod a+rx ./k9s
+
+# kubectl installer layer
+FROM base as kubectl
+
+WORKDIR /app
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kubectl && \
+    chmod a+rx kubectl
+
+# final image layer
+FROM base as final
 
 WORKDIR /root
 
-RUN apt-get update && apt-get install -y software-properties-common
-
-RUN add-apt-repository ppa:git-core/ppa && \
-    add-apt-repository ppa:jonathonf/vim
-
-RUN apt-get install -y \
-    curl \
-    git \
-    vim
-
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.3/bin/linux/amd64/kubectl && \
-    chmod a+rx kubectl && \
-    mv ./kubectl /usr/local/bin/kubectl
-
-RUN curl -LO https://github.com/derailed/k9s/releases/download/$(curl -s "https://api.github.com/repos/derailed/k9s/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')/k9s_Linux_x86_64.tar.gz && \
-    tar xvf k9s_Linux_x86_64.tar.gz && \
-    chmod a+rx ./k9s && \
-    mv ./k9s /usr/local/bin/k9s && \
-    rm k9s_Linux_x86_64.tar.gz
-
-RUN apt-get install -y libevent-dev
-
-COPY --from=builder /usr/local/bin/tmux /usr/local/bin/tmux
+COPY --from=kubectl /app/kubectl /usr/local/bin/kubectl
+COPY --from=k9s /app/k9s /usr/local/bin/k9s
+COPY --from=tmux /usr/local/bin/tmux /usr/local/bin/tmux
 
 RUN git clone https://github.com/tmux-plugins/tpm $HOME/.tmux/plugins/tpm
 
@@ -51,11 +61,7 @@ RUN tmux start-server && \
 COPY .vimrc.pluginstall .
 RUN vim -E -s -u ".vimrc.pluginstall" +'PlugInstall --sync' +qa
 
-RUN apt-get install -y nodejs npm
-
-RUN apt-get install -y sudo
-
-RUN git clone https://github.com/yuya-takeyama/helmenv.git ~/.helmenv && \
+RUN git clone https://github.com/yuya-takeyama/helmenv.git $HOME/.helmenv && \
     ln -snf $HOME/.helmenv/bin/helm /usr/local/bin/helm && \
     ln -snf $HOME/.helmenv/bin/helmenv /usr/local/bin/helmenv && \
     ln -snf $HOME/.helmenv/bin/tiller /usr/local/bin/tiller
