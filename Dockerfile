@@ -41,7 +41,14 @@ RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.3/b
 # final image layer
 FROM base as final
 
-WORKDIR /root
+SHELL ["/bin/bash", "-c"]
+RUN adduser --gecos "" --disabled-password toolbox && \
+    echo "%sudo   ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers && \
+    usermod -a -G sudo toolbox && \
+    touch /home/toolbox/.sudo_as_admin_successful
+
+USER toolbox
+WORKDIR /home/toolbox
 
 COPY --from=kubectl /app/kubectl /usr/local/bin/kubectl
 COPY --from=k9s /app/k9s /usr/local/bin/k9s
@@ -51,21 +58,21 @@ RUN git clone https://github.com/tmux-plugins/tpm $HOME/.tmux/plugins/tpm
 
 RUN curl -s https://raw.githubusercontent.com/thmhoag/dotfiles/master/scripts/dotfiles-clone.sh | bash
 
-RUN ln -s -f /bin/bash /bin/sh
 RUN tmux start-server && \
     tmux new-session -d && \
     sleep 1 && \
-    /root/.tmux/plugins/tpm/scripts/install_plugins.sh && \
+    $HOME/.tmux/plugins/tpm/scripts/install_plugins.sh && \
     tmux kill-server
 
 COPY .vimrc.pluginstall .
 RUN vim -E -s -u ".vimrc.pluginstall" +'PlugInstall --sync' +qa
 
 RUN git clone https://github.com/yuya-takeyama/helmenv.git $HOME/.helmenv && \
-    ln -snf $HOME/.helmenv/bin/helm /usr/local/bin/helm && \
-    ln -snf $HOME/.helmenv/bin/helmenv /usr/local/bin/helmenv && \
-    ln -snf $HOME/.helmenv/bin/tiller /usr/local/bin/tiller
+    sudo ln -snf $HOME/.helmenv/bin/helm /usr/local/bin/helm && \
+    sudo ln -snf $HOME/.helmenv/bin/helmenv /usr/local/bin/helmenv && \
+    sudo ln -snf $HOME/.helmenv/bin/tiller /usr/local/bin/tiller
 
-SHELL ["/bin/bash", "-c"]
 RUN helmenv install 3.1.1 && \
     helmenv global 3.1.1
+
+CMD tmux
